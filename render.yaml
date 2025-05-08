@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: surefire-artist-api
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: "python app.py"
+    envVars:
+      - key: AIRTABLE_API_KEY
+        sync: false
+      - key: BASE_ID
+        sync: false
+      - key: TABLE_NAME
+        sync: false
