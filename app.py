@@ -11,14 +11,11 @@ load_dotenv()
 app = Flask(__name__)
 
 # --- Airtable setup ---
-
-# Environment variables
 AIRTABLE_API_KEY = os.environ["AIRTABLE_API_KEY"]
 BASE_ID          = os.environ["BASE_ID"]
 TABLE_ID         = os.environ["TABLE_ID"]
-VIEW_ID          = os.environ["VIEW_ID"]   # Use View ID instead of name
+VIEW_ID          = os.environ["VIEW_ID"]
 
-# Airtable endpoint
 AIRTABLE_URL = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_ID}"
 
 HEADERS = {
@@ -28,7 +25,6 @@ HEADERS = {
 
 @app.route("/artists", methods=["GET"])
 def get_artists():
-    # Query the specific view by ID
     resp = requests.get(
         AIRTABLE_URL,
         headers=HEADERS,
@@ -52,11 +48,60 @@ def get_artists():
 
     return jsonify(data)
 
+@app.route("/artists/update", methods=["PATCH"])
+def update_artist():
+    payload = request.json
+    artist_name = payload.get("artist")
+
+    if not artist_name:
+        return jsonify({"error": "Missing artist name"}), 400
+
+    formula = f"{{Artist}}='{artist_name}'"
+    search_resp = requests.get(
+        AIRTABLE_URL,
+        headers=HEADERS,
+        params={"filterByFormula": formula}
+    )
+
+    if search_resp.status_code != 200:
+        return jsonify({"error": "Error fetching artist"}), search_resp.status_code
+
+    records = search_resp.json().get("records", [])
+    if not records:
+        return jsonify({"error": "Artist not found"}), 404
+
+    record_id = records[0]["id"]
+
+    editable_fields = {
+        "Instagram": payload.get("instagram"),
+        "Twitter (X)": payload.get("twitter"),
+        "Facebook": payload.get("facebook"),
+        "Soundcloud": payload.get("soundcloud"),
+        "Bandcamp": payload.get("bandcamp"),
+        "Artist Website": payload.get("artistWebsite"),
+        "MusicBrainz URL": payload.get("musicbrainzUrl"),
+        "Deezer": payload.get("deezer"),
+        "Apple Music": payload.get("appleMusic")
+    }
+
+    update_fields = {k: v for k, v in editable_fields.items() if v is not None}
+
+    patch_resp = requests.patch(
+        f"{AIRTABLE_URL}/{record_id}",
+        headers=HEADERS,
+        json={"fields": update_fields}
+    )
+
+    if patch_resp.status_code != 200:
+        return jsonify({"error": patch_resp.text}), patch_resp.status_code
+
+    return jsonify({"success": True, "updatedFields": update_fields})
+
 @app.route("/", methods=["GET"])
 def index():
     return "Surefire Artist API is running."
 
-# --- Instagram Graph API setup ---
+# --- Instagram Graph API ---
 IG_USER_ID      = os.getenv("IG_USER_ID")
 IG_ACCESS_TOKEN = os.getenv("IG_ACCESS_TOKEN")
 BASE_URL        = "https://graph.facebook.com/v17.0"
